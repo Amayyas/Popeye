@@ -1,0 +1,80 @@
+version: '3'
+
+services:
+  poll:
+    build:
+      context: ./poll
+    ports:
+      - "5000:80"
+    environment:
+      REDIS_HOST: "redis"
+    networks:
+      - poll-tier
+    restart: on-failure
+    depends_on:
+      - redis
+
+  redis:
+    image: "redis:7"
+    ports:
+      - "6379:6379"
+    networks:
+      - poll-tier
+      - back-tier
+    restart: on-failure
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      REDIS_HOST: "redis"
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "poll_db"
+      POSTGRES_USER: "poll_user"
+      POSTGRES_PASSWORD: "password"
+    depends_on:
+      - redis
+      - db
+    networks:
+      - back-tier
+    restart: on-failure
+
+  db:
+    image: "postgres:16"
+    environment:
+      POSTGRES_DB: "poll_db"
+      POSTGRES_USER: "poll_user"
+      POSTGRES_PASSWORD: "password"
+    volumes:
+      - db-data:/var/lib/postgresql/
+      - "./schema.sql:/docker-entrypoint-initdb.d/init.sql"
+    networks:
+      - result-tier
+      - back-tier
+    restart: on-failure
+
+  result:
+    build:
+      context: ./result
+    ports:
+      - "5001:80"
+    environment:
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "poll_db"
+      POSTGRES_USER: "poll_user"
+      POSTGRES_PASSWORD: "password"
+    depends_on:
+      - db
+    networks:
+      - result-tier
+    restart: on-failure
+
+networks:
+  poll-tier:
+  result-tier:
+  back-tier:
+
+volumes:
+  db-data:
